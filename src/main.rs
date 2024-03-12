@@ -128,7 +128,7 @@ impl Pipeline for StdPl {
         let mut pos = self.projection * self.model * vec4(vertex.0.x, vertex.0.y, vertex.0.z, 1.);
         pos.x /= pos.w;
         pos.y /= pos.w;
-        let norm = (vec4(vertex.1.x, vertex.1.y, vertex.1.z, 1.)).xyz();
+        let norm = (self.model * vec4(vertex.1.x, vertex.1.y, vertex.1.z, 0.)).xyz();
         (pos, norm, vertex.2)
     }
     fn frag(&self, texel: (Vec3, Vec2)) -> Color {
