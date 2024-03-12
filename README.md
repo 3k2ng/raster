@@ -1,1 +1,1 @@
-a software rasterizer created with macroquad
+a software rasterizer created with [macroquad](https://macroquad.rs/)
