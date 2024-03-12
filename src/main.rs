@@ -32,7 +32,7 @@ where
 }
 
 trait Pipeline {
-    fn vert(&self, vertex: (Vec3, Vec3, Vec2)) -> (Vec3, Vec3, Vec2);
+    fn vert(&self, vertex: (Vec3, Vec3, Vec2)) -> (Vec4, Vec3, Vec2);
     fn frag(&self, texel: (Vec3, Vec2)) -> Color;
 }
 
@@ -62,7 +62,7 @@ impl<P: Pipeline> Raster<P> {
         self.color_buffer.get_image_data_mut().fill([(255. * color.r) as u8, (255. * color.g) as u8, (255. * color.b) as u8, (255. * color.a) as u8]);
     }
     fn render(&mut self) {
-        let vts: Vec<((Vec3, Vec3, Vec2), (Vec3, Vec3, Vec2), (Vec3, Vec3, Vec2))> = self.index_buffer.chunks_exact(3).map(|idx| {
+        let vts: Vec<((Vec4, Vec3, Vec2), (Vec4, Vec3, Vec2), (Vec4, Vec3, Vec2))> = self.index_buffer.chunks_exact(3).map(|idx| {
             (self.denormalize(self.pipeline.vert(self.vertex_buffer[idx[0]])),
              self.denormalize(self.pipeline.vert(self.vertex_buffer[idx[1]])),
              self.denormalize(self.pipeline.vert(self.vertex_buffer[idx[2]])))
@@ -77,7 +77,7 @@ impl<P: Pipeline> Raster<P> {
             self.color_buffer.set_pixel(x as u32, y as u32, color);
         }
     }
-    fn triangle(&mut self, v0: (Vec3, Vec3, Vec2), v1: (Vec3, Vec3, Vec2), v2: (Vec3, Vec3, Vec2)) {
+    fn triangle(&mut self, v0: (Vec4, Vec3, Vec2), v1: (Vec4, Vec3, Vec2), v2: (Vec4, Vec3, Vec2)) {
         if (v0.0.x < 0. && v1.0.x < 0. && v2.0.x < 0.)
         || (v0.0.x > self.width as f32 && v1.0.x > self.width as f32 && v2.0.x > self.width as f32)
         || (v0.0.y < 0. && v1.0.y < 0. && v2.0.y < 0.)
@@ -88,29 +88,32 @@ impl<P: Pipeline> Raster<P> {
         let xbbmax = std::cmp::min(*[v0.0.x, v1.0.x, v2.0.x].map(|x| x as i32).iter().max().unwrap(), (self.width - 1) as i32);
         let ybbmin = std::cmp::max(*[v0.0.y, v1.0.y, v2.0.y].map(|x| x as i32).iter().min().unwrap(), 0);
         let ybbmax = std::cmp::min(*[v0.0.y, v1.0.y, v2.0.y].map(|x| x as i32).iter().max().unwrap(), (self.height - 1) as i32);
-        let iz0 = 1. / v0.0.z;
-        let iz1 = 1. / v1.0.z;
-        let iz2 = 1. / v2.0.z;
-        let noz0 = v0.1 / v0.0.z;
-        let noz1 = v1.1 / v1.0.z;
-        let noz2 = v2.1 / v2.0.z;
-        let tcoz0 = v0.2 / v0.0.z;
-        let tcoz1 = v1.2 / v1.0.z;
-        let tcoz2 = v2.2 / v2.0.z;
+        let iw0 = 1. / v0.0.w;
+        let iw1 = 1. / v1.0.w;
+        let iw2 = 1. / v2.0.w;
+        let zow0 = v0.0.z / v0.0.w;
+        let zow1 = v1.0.z / v1.0.w;
+        let zow2 = v2.0.z / v2.0.w;
+        let now0 = v0.1 / v0.0.w;
+        let now1 = v1.1 / v1.0.w;
+        let now2 = v2.1 / v2.0.w;
+        let tcow0 = v0.2 / v0.0.w;
+        let tcow1 = v1.2 / v1.0.w;
+        let tcow2 = v2.2 / v2.0.w;
         for i in ybbmin..=ybbmax {
             for j in xbbmin..=xbbmax {
                 let br = barycentric(v0.0.x, v0.0.y, v1.0.x, v1.0.y, v2.0.x, v2.0.y, j as f32, i as f32);
                 if [br.x, br.y, br.z].iter().any(|e| *e < -f32::EPSILON) { continue; }
-                let pcz = 1. / inter(br, iz0, iz1, iz2);
+                let pcw = 1. / inter(br, iw0, iw1, iw2);
                 self.pixel(j as u16, i as u16,
-                    pcz,
-                    self.pipeline.frag((pcz * inter(br, noz0, noz1, noz2), pcz * inter(br, tcoz0, tcoz1, tcoz2)))
+                    pcw * inter(br, zow0, zow1, zow2),
+                    self.pipeline.frag((pcw * inter(br, now0, now1, now2), pcw * inter(br, tcow0, tcow1, tcow2)))
                 );
             }
         }
     }
-    fn denormalize(&self, vertex: (Vec3, Vec3, Vec2)) -> (Vec3, Vec3, Vec2) {
-        (vec3((vertex.0.x + 1.) * 0.5 * self.width as f32, (vertex.0.y + 1.) * 0.5 * self.height as f32, vertex.0.z), vertex.1, vertex.2)
+    fn denormalize(&self, vertex: (Vec4, Vec3, Vec2)) -> (Vec4, Vec3, Vec2) {
+        (vec4((vertex.0.x + 1.) * 0.5 * self.width as f32, (vertex.0.y + 1.) * 0.5 * self.height as f32, vertex.0.z, vertex.0.w), vertex.1, vertex.2)
     }
 }
 
@@ -121,12 +124,12 @@ struct StdPl {
 }
 
 impl Pipeline for StdPl {
-    fn vert(&self, vertex: (Vec3, Vec3, Vec2)) -> (Vec3, Vec3, Vec2) {
+    fn vert(&self, vertex: (Vec3, Vec3, Vec2)) -> (Vec4, Vec3, Vec2) {
         let mut pos = self.projection * self.model * vec4(vertex.0.x, vertex.0.y, vertex.0.z, 1.);
         pos.x /= pos.w;
         pos.y /= pos.w;
         let norm = (vec4(vertex.1.x, vertex.1.y, vertex.1.z, 1.)).xyz();
-        (pos.xyz(), norm, vertex.2)
+        (pos, norm, vertex.2)
     }
     fn frag(&self, texel: (Vec3, Vec2)) -> Color {
         self.sample(texel.1)
@@ -141,11 +144,15 @@ impl StdPl {
 
 #[macroquad::main(window_config)]
 async fn main() {
+    let test_point = vec4(2., 2., 2., 1.);
+    println!("{:?}", Mat4::perspective_lh(PI * 0.25, 4./3., 0., 1000.) * test_point);
+    println!("{:?}", Mat4::orthographic_lh(-4., 4., -3., 3., 0., 1000.) * test_point);
+
     let pipeline = StdPl {
         texture: Image::from_file_with_format(include_bytes!("../assets/textures/madoka.png"), Some(ImageFormat::Png)).expect(""),
         model: Mat4::IDENTITY,
-        projection: Mat4::perspective_lh(PI * 0.25, 4./3., 0., 1000.),
-        // projection: Mat4::orthographic_lh(-4., 4., -3., 3., 0., 1000.),
+        // projection: Mat4::perspective_lh(PI * 0.25, 4./3., 0., 1000.),
+        projection: Mat4::orthographic_lh(-4., 4., -3., 3., 0., 1000.),
     };
     let mut rast = Raster::new(800, 600, pipeline);
     rast.vertex_buffer = vec![
