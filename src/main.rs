@@ -144,15 +144,10 @@ impl StdPl {
 
 #[macroquad::main(window_config)]
 async fn main() {
-    let test_point = vec4(2., 2., 2., 1.);
-    println!("{:?}", Mat4::perspective_lh(PI * 0.25, 4./3., 0., 1000.) * test_point);
-    println!("{:?}", Mat4::orthographic_lh(-4., 4., -3., 3., 0., 1000.) * test_point);
-
     let pipeline = StdPl {
         texture: Image::from_file_with_format(include_bytes!("../assets/textures/madoka.png"), Some(ImageFormat::Png)).expect(""),
         model: Mat4::IDENTITY,
-        // projection: Mat4::perspective_lh(PI * 0.25, 4./3., 0., 1000.),
-        projection: Mat4::orthographic_lh(-4., 4., -3., 3., 0., 1000.),
+        projection: Mat4::perspective_lh(PI * 0.25, 4./3., 0., 1000.),
     };
     let mut rast = Raster::new(800, 600, pipeline);
     rast.vertex_buffer = vec![
@@ -179,17 +174,25 @@ async fn main() {
     render.set_filter(FilterMode::Nearest);
     let mut time = PI / 4.;
     let mut stop = false;
+    let mut perp = true;
     loop {
         if is_key_pressed(KeyCode::Space) { stop = !stop; };
+        if is_key_pressed(KeyCode::P) { perp = !perp; };
         rast.clear(color_u8!(0, 0, 0, 0));
         rast.pipeline.model = Mat4::from_translation(vec3(0., 0., 5.)) * Mat4::from_rotation_y(time);
+        rast.pipeline.projection = if perp { 
+            Mat4::perspective_lh(PI * 0.25, 4./3., 0., 1000.) 
+        } 
+        else {
+            Mat4::orthographic_lh(-4., 4., -3., 3., 0., 1000.)
+        };
         rast.render();
         render.update(&rast.color_buffer);
         draw_texture_ex(&render, 0., 0., color_u8!(255, 255, 255, 255), DrawTextureParams{
             dest_size: Some(vec2(800., 600.)),
             ..Default::default()
         });
-        draw_text(format!("{}", get_fps()).as_str(), 0., 32., 32., color_u8!(255, 255, 255, 255));
+        draw_text(format!("{}", get_fps()).as_str(), 0., 20., 32., color_u8!(255, 255, 255, 255));
         next_frame().await;
         if !stop {
             time += time::get_frame_time();
