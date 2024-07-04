@@ -1,0 +1,12 @@
+[package]
+name = "raster"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bytemuck = "1.16.1"
+image = "0.25.1"
+rayon = "1.10.0"
+softbuffer = "0.4.5"
+wide = "0.7.25"
+winit = "0.30.3"
