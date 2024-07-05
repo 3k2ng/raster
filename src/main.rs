@@ -1,6 +1,5 @@
 use std::rc::Rc;
 
-use image::GenericImageView;
 use winit::window::Window;
 
 fn barycentric(
@@ -143,10 +142,27 @@ impl Transform {
     }
 }
 
+trait FromFile<P: AsRef<std::path::Path>> {
+    fn from_file(path: P) -> Self;
+}
+
 struct Texture {
     width: u32,
     height: u32,
     color: Box<[u32]>,
+}
+
+impl<P: AsRef<std::path::Path>> FromFile<P> for Texture {
+    fn from_file(path: P) -> Self {
+        let img = image::open(path).unwrap();
+        Texture {
+            width: img.width(),
+            height: img.height(),
+            color: image::GenericImageView::pixels(&img)
+                .map(|(_, _, p)| (p[0] as u32) << 16 | (p[1] as u32) << 8 | p[2] as u32)
+                .collect(),
+        }
+    }
 }
 
 impl Texture {
@@ -355,17 +371,7 @@ impl App {
 }
 
 fn main() {
-    let madoka = Texture {
-        width: 256,
-        height: 256,
-        color: image::open("assets/textures/madoka.png")
-            .unwrap()
-            .pixels()
-            .into_iter()
-            .map(|(_, _, p)| (p[0] as u32) << 16 | (p[1] as u32) << 8 | (p[2] as u32))
-            .collect::<Vec<u32>>()
-            .into_boxed_slice(),
-    };
+    let madoka = Texture::from_file("assets/textures/madoka.png");
     let scene = Rc::new(Scene {
         camera: Camera {
             position: vector(0., 0., 4.),
